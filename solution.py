@@ -22,8 +22,8 @@ def preprocess(df):
     df_proc['Region_Code'] = df_proc['Region_Code'].fillna('Unknown')
     df_proc['Deductible_Tier'] = df_proc['Deductible_Tier'].fillna('Unknown')
     df_proc['Acquisition_Channel'] = df_proc['Acquisition_Channel'].fillna('Unknown')
-    df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
-    df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
+    df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1).astype(str)
+    df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1).astype(str)
 
     # Convert object columns to category for LightGBM
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
@@ -36,6 +36,10 @@ def preprocess(df):
     # Feature Engineering (Combined Dependents)
     df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
     df_proc['Risk_Score_Proxy'] = df_proc['Years_Without_Claims'] - df_proc['Previous_Claims_Filed']
+
+    # Deep features
+    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
+    df_proc['Risk_Ratio'] = df_proc['Risk_Score_Proxy'] / (df_proc['Years_Without_Claims'] + 1)
 
     # Downcast numeric types for memory optimization (1GB constraint)
     float_cols = df_proc.select_dtypes(include=['float64']).columns
@@ -56,6 +60,7 @@ def load_model():
     # ------------------ MODEL LOADING LOGIC ------------------
 
     # Inside this block, load your trained model.
+    # We now load a dictionary containing both the classifier and the encoder
     model = joblib.load('model.pkl')
 
     # ------------------ END MODEL LOADING LOGIC ------------------
@@ -69,8 +74,23 @@ def predict(df, model):
     # Ignore User_ID in features
     X = df.drop(columns=['User_ID'])
     
+    # Unpack loaded model components (Combined dict format)
+    if isinstance(model, dict):
+        lgbm_model = model['model']
+        te = model['encoder']
+    else:
+        # Fallback for old tuple-style if testing locally
+        lgbm_model, te = model
+    
+    # Apply Target Encoding
+    X_enc = te.transform(X)
+    
+    # Float32 Downcast encodings for memory limits
+    enc_float = X_enc.select_dtypes(include=['float64']).columns
+    X_enc[enc_float] = X_enc[enc_float].astype('float32')
+
     # Generate predictions
-    preds = model.predict(X)
+    preds = lgbm_model.predict(X_enc)
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'],
         'Purchased_Coverage_Bundle': preds.astype(int) # Explicit integer cast
