@@ -22,8 +22,8 @@ def preprocess(df):
     df_proc['Region_Code'] = df_proc['Region_Code'].fillna('Unknown')
     df_proc['Deductible_Tier'] = df_proc['Deductible_Tier'].fillna('Unknown')
     df_proc['Acquisition_Channel'] = df_proc['Acquisition_Channel'].fillna('Unknown')
-    df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1).astype(str)
-    df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1).astype(str)
+    df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
+    df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
 
     # Convert object columns to category for LightGBM
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
@@ -33,13 +33,15 @@ def preprocess(df):
         if col in df_proc.columns:
             df_proc[col] = df_proc[col].astype('category')
             
-    # Feature Engineering (Combined Dependents)
+    # Feature Engineering (Combined Dependents and Risk)
     df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
     df_proc['Risk_Score_Proxy'] = df_proc['Years_Without_Claims'] - df_proc['Previous_Claims_Filed']
-
-    # Deep features
     df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
-    df_proc['Risk_Ratio'] = df_proc['Risk_Score_Proxy'] / (df_proc['Years_Without_Claims'] + 1)
+    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
+
+    # CRITICAL: Drop noisy IDs to prevent overfitting
+    cols_to_drop = ['Broker_ID', 'Employer_ID']
+    df_proc = df_proc.drop(columns=[col for col in cols_to_drop if col in df_proc.columns])
 
     # Downcast numeric types for memory optimization (1GB constraint)
     float_cols = df_proc.select_dtypes(include=['float64']).columns
@@ -60,7 +62,6 @@ def load_model():
     # ------------------ MODEL LOADING LOGIC ------------------
 
     # Inside this block, load your trained model.
-    # We now load a dictionary containing both the classifier and the encoder
     model = joblib.load('model.pkl')
 
     # ------------------ END MODEL LOADING LOGIC ------------------
@@ -68,27 +69,14 @@ def load_model():
 
 
 def predict(df, model):
+    predictions = None
     # ------------------ PREDICTION LOGIC ------------------
 
     # Ignore User_ID in features
     X = df.drop(columns=['User_ID'])
     
-    # Unpack loaded model components (Combined dict format)
-    lgbm_model = model['model']
-    encoding_dict = model['encoding_dict']
-    
-    # Manually map the target encodings natively for judge compatibility
-    for col, mapping in encoding_dict.items():
-        if col in X.columns:
-            # Map values, fill unseen categories with the global mean of the training target
-            X[col] = X[col].map(mapping).fillna(mapping.get('__global_mean__', 0))
-    
-    # Ensure encoded columns are floats and downcast for memory
-    enc_float = X.select_dtypes(include=['float64']).columns
-    X[enc_float] = X[enc_float].astype('float32')
-
     # Generate predictions
-    preds = lgbm_model.predict(X)
+    preds = model.predict(X)
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'],
         'Purchased_Coverage_Bundle': preds.astype(int) # Explicit integer cast
