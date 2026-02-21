@@ -68,29 +68,27 @@ def load_model():
 
 
 def predict(df, model):
-    predictions = None
     # ------------------ PREDICTION LOGIC ------------------
 
     # Ignore User_ID in features
     X = df.drop(columns=['User_ID'])
     
     # Unpack loaded model components (Combined dict format)
-    if isinstance(model, dict):
-        lgbm_model = model['model']
-        te = model['encoder']
-    else:
-        # Fallback for old tuple-style if testing locally
-        lgbm_model, te = model
+    lgbm_model = model['model']
+    encoding_dict = model['encoding_dict']
     
-    # Apply Target Encoding
-    X_enc = te.transform(X)
+    # Manually map the target encodings natively for judge compatibility
+    for col, mapping in encoding_dict.items():
+        if col in X.columns:
+            # Map values, fill unseen categories with the global mean of the training target
+            X[col] = X[col].map(mapping).fillna(mapping.get('__global_mean__', 0))
     
-    # Float32 Downcast encodings for memory limits
-    enc_float = X_enc.select_dtypes(include=['float64']).columns
-    X_enc[enc_float] = X_enc[enc_float].astype('float32')
+    # Ensure encoded columns are floats and downcast for memory
+    enc_float = X.select_dtypes(include=['float64']).columns
+    X[enc_float] = X[enc_float].astype('float32')
 
     # Generate predictions
-    preds = lgbm_model.predict(X_enc)
+    preds = lgbm_model.predict(X)
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'],
         'Purchased_Coverage_Bundle': preds.astype(int) # Explicit integer cast
