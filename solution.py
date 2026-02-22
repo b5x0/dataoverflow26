@@ -1,13 +1,3 @@
-# ----------------------------------------------------------------
-# IMPORTANT: This template will be used to evaluate your solution.
-#
-# Do NOT change the function signatures.
-# And ensure that your code runs within the time limits.
-# The time calculation will be computed for the predict function only.
-#
-# Good luck!
-# ----------------------------------------------------------------
-
 # Import necessary libraries here
 import pandas as pd
 import joblib
@@ -54,36 +44,23 @@ def preprocess(df):
 
     return df_proc
 
-
 def load_model():
     return joblib.load('model.pkl')
 
-
 def predict(df, model):
-    # ------------------ PREDICTION LOGIC ------------------
-
-    # Ignore User_ID in features
     X = df.drop(columns=['User_ID'])
+    preds = model.predict(X)
     
-    # Predict (model is already constrained to n_jobs=1 from training)
-    # Flatten the prediction array since CatBoost returns a 2D column vector automatically
-    preds = model.predict(X).flatten()
-    
-    # Ultra-fast DataFrame construction using numpy values
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'].values,
         'Purchased_Coverage_Bundle': preds.astype(int)
     })
-
-    # ------------------ END PREDICTION LOGIC ------------------
     return predictions
-
 
 # ----------------------------------------------------------------
 # Your code will be called in the following way:
 # Note that we will not be using the function defined below.
 # ----------------------------------------------------------------
-
 
 def run(df) -> tuple[float, float, float]:
     from time import time
@@ -97,24 +74,14 @@ def run(df) -> tuple[float, float, float]:
 
     # Get the predictions and time taken:
     start = time.perf_counter()
-    predictions = predict(
-        df_processed, model
-    )  # NOTE: Don't call the `preprocess` function here.
-
+    predictions = predict(df_processed, model)
     duration = time.perf_counter() - start
     accuracy = get_model_accuracy(predictions)
 
     return size, accuracy, duration
 
-
-# ----------------------------------------------------------------
-# Helper functions you should not disturb yourself with.
-# ----------------------------------------------------------------
-
-
 def get_model_size(model):
     pass
-
 
 def get_model_accuracy(predictions):
     pass
