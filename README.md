@@ -28,7 +28,7 @@ Unlike standard "black-box" models, InsureGuard was built under strict 1-core CP
 ## 📦 Installation & Setup
 ```bash
 # Clone the repository
-git clone [https://github.com/your-repo/InsureGuard.git](https://github.com/your-repo/InsureGuard.git)
+git clone [https://github.com/b5x0/dataoverflow26.git](https://github.com/b5x0/dataoverflow26.git)
 
 # Install dependencies
 pip install -r requirements.txt
