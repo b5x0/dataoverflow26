@@ -1,6 +1,25 @@
 # Voice-QL Advisor: AI Spokesman Edition (v2.2)
 
-An intelligent, voice-activated insurance advisor HUD. The AI Agent acts as a "Spokesman," calling potential clients to gather demographic and risk data, providing real-time bundle predictions and lookalike searches.
+An intelligent, voice-activated insurance advisor HUD and "Spokesman" simulator, developed as part of the **Data Overflow 2026 Hackathon**.
+
+## 📖 Project Context: Data Overflow 2026
+
+This project was built in two distinct phases to solve a complex insurance sales optimization challenge:
+
+### Phase 1: Model Engineering & Training
+In the first phase, we focused on deep data science:
+- **Dataset**: Analyzed a large insurance client dataset with diverse demographic and risk features.
+- **Model Training**: Developed and fine-tuned a **LightGBM** multiclass classifier to predict optimal coverage bundles (0–9).
+- **Optimization**: Achieved a critical balance between high accuracy (Macro F1 benchmark) and ultra-fast inference latency (sub-10ms) using a native NumPy prediction path.
+
+### Phase 2: Creative HUD & Live AI Deployment
+The second phase transformed a dry predictive model into a "WOW" user experience:
+- **AI Spokesman**: Integrated **Gemini 2.5 Live (Native Audio)** to create a proactive salesperson persona. The AI "calls" clients, gathers data via voice, and delivers tactical pitches.
+- **Creative UI**: Designed a premium, dark-themed "Strategist HUD" using React and TypeScript, providing real-time visual feedback on audio levels, transcripts, and model insights.
+- **Qdrant Integration**: Implemented a vector search layer using **Qdrant** to instantly find "Lookalike" client profiles from a database of over **60,000** records, providing agents with historical context.
+- **Hybrid Voice Flow**: Combined the **Browser Web Speech API** (for high-fidelity transcription) with **Gemini Live** (for low-latency voice interaction) to bypass hardware and API limitations.
+
+---
 
 ## 🚀 Quick Start (Local)
 
@@ -19,20 +38,11 @@ An intelligent, voice-activated insurance advisor HUD. The AI Agent acts as a "S
 
 ## ☁️ Deployment (Render)
 
-### Backend (Web Service)
-1. **Repository**: Connect your GitHub repo.
-2. **Runtime**: Python.
-3. **Build Command**: `pip install -r requirements.txt`
-4. **Start Command**: `python -m uvicorn advisor.backend.main:app --host 0.0.0.0 --port $PORT`
-5. **Environment Variables**:
-   - Add `GEMINI_API_KEY`.
+For a step-by-step guide to cloud deployment, see the [Render Deployment Guide](.system_generated/Render-Deployment-Guide.md).
 
-### Frontend (Static Site)
-1. **Build Command**: `npm run build`
-2. **Publish Directory**: `advisor/frontend/dist`
-
-## 🛠️ Architecture
-- **Voice**: Browser Web Speech API (Transcription) + Gemini Live (Native Audio Interaction).
-- **Analytics**: LightGBM (Bundle Prediction) + SHAP (Impact Drivers) + Qdrant (Lookalike Search).
-- **Frontend**: React + TypeScript + Vitest + Lucide Icons.
-- **Backend*: FastAPI + Pydantic + Uvicorn.
+## 🛠️ Technical Stack
+- **AI**: Gemini 2.5 Flash (Live & REST).
+- **Database**: Qdrant (Vector Engine).
+- **ML**: LightGBM, SHAP, NumPy, Pandas.
+- **Backend**: FastAPI, Pydantic, Uvicorn.
+- **Frontend**: React, TypeScript, Vite, Lucide Icons.
