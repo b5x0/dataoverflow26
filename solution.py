@@ -16,6 +16,16 @@ def preprocess(df):
     df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
     df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
 
+    # Feature Engineering (Combined Dependents and Risk)
+    df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
+    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
+    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
+
+    # New Hybrid Sniper Features (High-Intensity Interactions)
+    df_proc['Loyalty_Index'] = df_proc['Years_Without_Claims'] * df_proc['Existing_Policyholder']
+    df_proc['Household_Burden'] = df_proc['Total_Dependents'] / (df_proc['Vehicles_on_Policy'] + 1)
+    df_proc['Premium_Capacity'] = df_proc['Estimated_Annual_Income'] / (df_proc['Deductible_Tier'].map({'Tier 1': 1, 'Tier 2': 2, 'Tier 3': 3, 'Tier 4': 4}).fillna(2))
+
     # Convert object columns to category for LightGBM
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
                 'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status',
@@ -23,11 +33,6 @@ def preprocess(df):
     for col in cat_cols:
         if col in df_proc.columns:
             df_proc[col] = df_proc[col].astype('category')
-            
-    # Feature Engineering (Combined Dependents and Risk)
-    df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
-    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
-    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
 
     # CRITICAL: Drop noisy IDs and highly correlated Risk_Score_Proxy
     cols_to_drop = ['Broker_ID', 'Employer_ID', 'Risk_Score_Proxy']
@@ -49,7 +54,8 @@ def load_model():
 
 def predict(df, model):
     X = df.drop(columns=['User_ID'])
-    preds = model.predict(X)
+    # LightGBM predict
+    preds = model.predict(X).flatten()
     
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'].values,
