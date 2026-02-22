@@ -10,6 +10,7 @@
 
 
 import pandas as pd
+import joblib
 import catboost as cb
 
 def preprocess(df):
@@ -64,8 +65,7 @@ def load_model():
     # ------------------ MODEL LOADING LOGIC ------------------
 
     # Inside this block, load your trained model.
-    model = cb.CatBoostClassifier()
-    model.load_model('model.cbm')
+    model = joblib.load('model.pkl')
 
     # ------------------ END MODEL LOADING LOGIC ------------------
     return model

@@ -36,11 +36,12 @@ def optimize_catboost():
     model = cb.CatBoostClassifier(**params)
     model.fit(X, y, cat_features=cat_features)
     
-    print("Saving model to model.cbm...")
-    model.save_model('model.cbm')
+    print("Saving model via joblib to model.pkl...")
+    import joblib
+    joblib.dump(model, 'model.pkl')
     
     import os
-    print(f"Model saved. Size: {os.path.getsize('model.cbm') / (1024*1024):.2f} MB")
+    print(f"Model saved. Size: {os.path.getsize('model.pkl') / (1024*1024):.2f} MB")
 
 if __name__ == "__main__":
     optimize_catboost()
