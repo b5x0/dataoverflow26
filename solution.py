@@ -5,45 +5,29 @@ import lightgbm as lgb
 import numpy as np
 
 def preprocess(df):
-    df_proc = df.copy()
+    # Avoid .copy() if possible to save RAM and CPU cycles
+    # Work directly on the dataframe or use a very lean selection
+    
+    # Vectorized engineering (much faster than apply/loops)
+    df['Total_Deps'] = df['Adult_Dependents'] + df['Child_Dependents'].fillna(0) + df['Infant_Dependents']
+    df['Income_per_Dep'] = df['Estimated_Annual_Income'] / (df['Total_Deps'] + 1)
+    df['Risk_Ratio'] = df['Previous_Claims_Filed'] / (df['Years_Without_Claims'] + 1)
 
-    # Fill basic missing values
-    df_proc['Child_Dependents'] = df_proc['Child_Dependents'].fillna(-1)
-    df_proc['Region_Code'] = df_proc['Region_Code'].fillna('Unknown')
-    df_proc['Deductible_Tier'] = df_proc['Deductible_Tier'].fillna('Unknown')
-    df_proc['Acquisition_Channel'] = df_proc['Acquisition_Channel'].fillna('Unknown')
-
-    # Convert object columns to category explicitly
-    cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
-                'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status',
-                'Policy_Start_Month']
+    # Fast categorical conversion
+    cat_cols = ['Region_Code', 'Deductible_Tier', 'Acquisition_Channel', 'Employment_Status']
     for col in cat_cols:
-        if col in df_proc.columns:
-            df_proc[col] = df_proc[col].astype('category')
+        if col in df.columns:
+            df[col] = df[col].astype('category')
             
-    # Feature Engineering (Sniper Minimal Vectorized Interactions)
-    if 'Purchased_Coverage_Bundle' not in df_proc.columns:
-        Total_Dependents = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
-    else:
-        Total_Dependents = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
-    
-    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (Total_Dependents + 1)
-    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
-    df_proc['Loyalty_Index'] = df_proc['Previous_Policy_Duration_Months'] * df_proc['Existing_Policyholder']
+    # Final downcast to float32
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
 
-    # CRITICAL: Drop noisy IDs
+    # Drop noisy IDs
     cols_to_drop = ['Broker_ID', 'Employer_ID']
-    df_proc.drop(columns=[col for col in cols_to_drop if col in df_proc.columns], inplace=True)
-
-    # Perform a final .astype('float32') on all numerical columns to minimize cache misses
-    num_cols = df_proc.select_dtypes(include=['number']).columns
-    df_proc[num_cols] = df_proc[num_cols].astype('float32')
-    
-    # Keep output formatting clean
-    if 'Purchased_Coverage_Bundle' in df_proc.columns:
-         df_proc['Purchased_Coverage_Bundle'] = df_proc['Purchased_Coverage_Bundle'].astype(int)
-
-    return df_proc
+    df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True)
+        
+    return df
 
 def load_model():
     return joblib.load('model.pkl')
