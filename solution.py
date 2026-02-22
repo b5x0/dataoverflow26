@@ -9,9 +9,8 @@
 # ----------------------------------------------------------------
 
 
-# Import necessary libraries here
 import pandas as pd
-import joblib
+import catboost as cb
 
 def preprocess(df):
     # Create a copy to avoid SettingWithCopyWarning, but do it efficiently
@@ -25,12 +24,15 @@ def preprocess(df):
     df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
     df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
 
-    # Convert object columns to category for LightGBM
+    # Convert object columns to category for LightGBM/CatBoost
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
                 'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status',
                 'Policy_Start_Month']
     for col in cat_cols:
         if col in df_proc.columns:
+            # We enforce string typing for objects initially, then to category.
+            # CatBoost handles string/category columns perfectly when passed via cat_features.
+            # Easiest way to handle is cast to string here to avoid mixed types, but 'category' is safer overall.
             df_proc[col] = df_proc[col].astype('category')
             
     # Feature Engineering (Combined Dependents and Risk)
@@ -62,24 +64,27 @@ def load_model():
     # ------------------ MODEL LOADING LOGIC ------------------
 
     # Inside this block, load your trained model.
-    model = joblib.load('model.pkl')
+    model = cb.CatBoostClassifier()
+    model.load_model('model.cbm')
 
     # ------------------ END MODEL LOADING LOGIC ------------------
     return model
 
 
 def predict(df, model):
-    predictions = None
     # ------------------ PREDICTION LOGIC ------------------
 
     # Ignore User_ID in features
     X = df.drop(columns=['User_ID'])
     
-    # Generate predictions
-    preds = model.predict(X)
+    # Predict (model is already constrained to n_jobs=1 from training)
+    # Flatten the prediction array since CatBoost returns a 2D column vector automatically
+    preds = model.predict(X).flatten()
+    
+    # Ultra-fast DataFrame construction using numpy values
     predictions = pd.DataFrame({
-        'User_ID': df['User_ID'],
-        'Purchased_Coverage_Bundle': preds.astype(int) # Explicit integer cast
+        'User_ID': df['User_ID'].values,
+        'Purchased_Coverage_Bundle': preds.astype(int)
     })
 
     # ------------------ END PREDICTION LOGIC ------------------
