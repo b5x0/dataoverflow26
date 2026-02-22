@@ -36,3 +36,18 @@ pip install -r requirements.txt
 
 # Run the local Qdrant instance
 docker run -p 6333:6333 qdrant/qdrant
+
+```
+
+## 📈 Performance Metrics
+
+| Metric | Result |
+| --- | --- |
+| **Macro F1 Score** | 0.5513 |
+| **Inference Latency** | 0.96s (1-core) |
+| **Model Size** | 3.25 MB |
+| **RAM Usage** | < 1GB |
+
+---
+
+*Developed for the 2026 Insurance Innovation Challenge.*
