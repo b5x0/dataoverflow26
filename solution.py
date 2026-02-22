@@ -5,30 +5,35 @@ import lightgbm as lgb
 import numpy as np
 
 def preprocess(df):
-    # Avoid .copy() if possible to save RAM and CPU cycles
-    # Work directly on the dataframe or use a very lean selection
+    # 2. DROP FIRST
+    cols_to_drop = ['Broker_ID', 'Employer_ID']
+    df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True)
     
-    # Vectorized engineering (much faster than apply/loops)
+    # 1. IN-PLACE PREPROCESSING / Vectorized engineering
     df['Total_Deps'] = df['Adult_Dependents'] + df['Child_Dependents'].fillna(0) + df['Infant_Dependents']
     df['Income_per_Dep'] = df['Estimated_Annual_Income'] / (df['Total_Deps'] + 1)
     df['Risk_Ratio'] = df['Previous_Claims_Filed'] / (df['Years_Without_Claims'] + 1)
 
-    # Fast categorical conversion
+    # 3. CATEGORICAL CASTING
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier', 
                 'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status', 
                 'Policy_Start_Month']
-    for col in cat_cols:
-        if col in df.columns:
-            df[col] = df[col].astype('category')
-            
-    # Final downcast to float32
-    for col in df.select_dtypes(include=['float64']).columns:
-        df[col] = df[col].astype('float32')
-
-    # Drop noisy IDs
-    cols_to_drop = ['Broker_ID', 'Employer_ID']
-    df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True)
+    
+    # Fast casting via dictionary mapping
+    cat_dtypes = {col: 'category' for col in cat_cols if col in df.columns}
+    if cat_dtypes:
+        df = df.astype(cat_dtypes, copy=False)
         
+    # 4. DATATYPE COMPRESSION
+    float_cols = df.select_dtypes(include=['float64']).columns
+    if len(float_cols) > 0:
+        df[float_cols] = df[float_cols].astype('float32', copy=False)
+        
+    int_cols = df.select_dtypes(include=['int64']).columns
+    int_cols = [c for c in int_cols if c not in ['User_ID', 'Purchased_Coverage_Bundle']]
+    if len(int_cols) > 0:
+        df[int_cols] = df[int_cols].astype('int32', copy=False)
+
     return df
 
 def load_model():
