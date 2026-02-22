@@ -16,7 +16,6 @@ Unlike standard "black-box" models, InsureGuard was built under strict 1-core CP
 * **Prediction Engine:** LightGBM (Optimized for 1-core/150-tree inference).
 * **Vector Search:** Qdrant (Customer Lookalike Engine for social proofing).
 * **Explainability:** SHAP (Local feature contribution analysis).
-* **Intelligent OCR:** Gemini 1.5 Pro (Automated Carte Grise data extraction).
 * **Backend:** FastAPI (Asynchronous inference & reasoning).
 * **Frontend:** React (Interactive Agent Dashboard).
 
