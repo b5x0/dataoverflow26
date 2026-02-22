@@ -40,15 +40,16 @@ def load_model():
     return joblib.load('model.pkl')
 
 def predict(df, model):
-    X = df.drop(columns=['User_ID'])
+    # Eagerly capture and drop User_ID
+    user_ids = df['User_ID'].values
+    df.drop(columns=['User_ID'], inplace=True)
     
-    # Vectorization & Flattening: Access numpy array via .values, predict, and cast
-    # (Note: Passing X natively handles LightGBM categorical types better than X.values)
-    preds = model.predict(X).astype(int)
+    # Predict directly, dropping the DataFrame to just raw values handled natively
+    preds = model.predict(df, raw_score=False).astype(int)
     
     # Final rapid DF construction
     predictions = pd.DataFrame({
-        'User_ID': df['User_ID'].values,
+        'User_ID': user_ids,
         'Purchased_Coverage_Bundle': preds
     })
     return predictions

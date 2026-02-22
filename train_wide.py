@@ -23,11 +23,11 @@ def train_wide_sniper():
         objective='multiclass',
         num_class=10,
         boosting_type='gbdt',
-        learning_rate=0.1,
+        learning_rate=0.15,
         max_depth=-1, # No explicit limit ensures pure num_leaves constraint
-        num_leaves=127,
-        min_child_samples=100, # Also known as min_data_in_leaf
-        n_estimators=90,
+        num_leaves=150,
+        min_child_samples=120, # Also known as min_data_in_leaf
+        n_estimators=72,
         n_jobs=1,              # STRICT single core requirement
         class_weight=weights,  
         random_state=42,
