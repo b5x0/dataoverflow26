@@ -1,48 +1,38 @@
-# Voice-QL Advisor: AI Spokesman Edition (v2.2)
+# 🛡️ InsureGuard: High-Performance Bundle Prediction & Advisor
 
-An intelligent, voice-activated insurance advisor HUD and "Spokesman" simulator, developed as part of the **Data Overflow 2026 Hackathon**.
+InsureGuard is an end-to-end insurance decision support system designed for high-concurrency, low-latency environments. It combines a surgically optimized LightGBM prediction engine with advanced Explainable AI (SHAP) and a Vectorized Lookalike Engine (Qdrant) to empower insurance agents with data-driven insights.
 
-## 📖 Project Context: Data Overflow 2026
+## 🚀 The "Surgical Strike" Methodology
+Unlike standard "black-box" models, InsureGuard was built under strict 1-core CPU and 1GB RAM constraints. We prioritized **Efficiency-per-Split** to achieve a competitive **0.5413 Macro F1** while maintaining sub-2-second inference latency.
 
-This project was built in two distinct phases to solve a complex insurance sales optimization challenge:
+### Key Optimization Pillars:
+* **Feature Pruning:** Systematically removed high-cardinality noise (e.g., `Region_Code`, `Acquisition_Channel`) to reduce leaf-traversal overhead.
+* **Engineered Signal:** Injected high-intensity interactions like `Risk_Ratio`, `Loyalty_Index`, and `Premium_Capacity` to maximize accuracy with fewer trees.
+* **Hardware-Aware Inference:** Hard-coded `n_jobs=1` and utilized `.values` NumPy conversion to bypass Pandas indexing bottlenecks in containerized environments.
 
-### Phase 1: Model Engineering & Training
-In the first phase, we focused on deep data science:
-- **Dataset**: Analyzed a large insurance client dataset with diverse demographic and risk features.
-- **Model Training**: Developed and fine-tuned a **LightGBM** multiclass classifier to predict optimal coverage bundles (0–9).
-- **Optimization**: Achieved a critical balance between high accuracy (Macro F1 benchmark) and ultra-fast inference latency (sub-10ms) using a native NumPy prediction path.
+## 🛠️ Tech Stack & Architecture
 
-### Phase 2: Creative HUD & Live AI Deployment
-The second phase transformed a dry predictive model into a "WOW" user experience:
-- **AI Spokesman**: Integrated **Gemini 2.5 Live (Native Audio)** to create a proactive salesperson persona. The AI "calls" clients, gathers data via voice, and delivers tactical pitches.
-- **Creative UI**: Designed a premium, dark-themed "Strategist HUD" using React and TypeScript, providing real-time visual feedback on audio levels, transcripts, and model insights.
-- **Qdrant Integration**: Implemented a vector search layer using **Qdrant** to instantly find "Lookalike" client profiles from a database of over **60,000** records, providing agents with historical context.
-- **Hybrid Voice Flow**: Combined the **Browser Web Speech API** (for high-fidelity transcription) with **Gemini Live** (for low-latency voice interaction) to bypass hardware and API limitations.
 
----
+* **Prediction Engine:** LightGBM (Optimized for 1-core/150-tree inference).
+* **Vector Search:** Qdrant (Customer Lookalike Engine for social proofing).
+* **Explainability:** SHAP (Local feature contribution analysis).
+* **Intelligent OCR:** Gemini 1.5 Pro (Automated Carte Grise data extraction).
+* **Backend:** FastAPI (Asynchronous inference & reasoning).
+* **Frontend:** React (Interactive Agent Dashboard).
 
-## 🚀 Quick Start (Local)
+## 💡 Phase 2 Features: The "Transparent Advisor"
+1. **Automated Onboarding:** Using Gemini OCR to extract vehicle and user data directly from registration documents, reducing data-entry friction.
+2. **Social Proofing:** Qdrant lookalike search identifies the 5 most similar historical clients to provide evidence-based recommendations.
+3. **The "Why" Layer:** Real-time SHAP visualizations explain exactly which factors (e.g., household burden, claim history) influenced the bundle suggestion.
+4. **Agent Mentor:** Gemini-powered natural language reasoning transforms raw scores into personalized sales scripts.
 
-1. **Environment**:
-   - Create a `.env` file in the root:
-     ```env
-     GEMINI_API_KEY=your_key_here
-     ```
-2. **Backend**:
-   - `pip install -r requirements.txt`
-   - `python -m uvicorn advisor.backend.main:app --port 8002 --reload`
-3. **Frontend**:
-   - `cd advisor/frontend`
-   - `npm install`
-   - `npm run dev`
+## 📦 Installation & Setup
+```bash
+# Clone the repository
+git clone [https://github.com/your-repo/InsureGuard.git](https://github.com/your-repo/InsureGuard.git)
 
-## ☁️ Deployment (Render)
+# Install dependencies
+pip install -r requirements.txt
 
-For a step-by-step guide to cloud deployment, see the [Render Deployment Guide](.system_generated/Render-Deployment-Guide.md).
-
-## 🛠️ Technical Stack
-- **AI**: Gemini 2.5 Flash (Live & REST).
-- **Database**: Qdrant (Vector Engine).
-- **ML**: LightGBM, SHAP, NumPy, Pandas.
-- **Backend**: FastAPI, Pydantic, Uvicorn.
-- **Frontend**: React, TypeScript, Vite, Lucide Icons.
+# Run the local Qdrant instance
+docker run -p 6333:6333 qdrant/qdrant
