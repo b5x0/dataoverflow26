@@ -14,7 +14,9 @@ def preprocess(df):
     df['Risk_Ratio'] = df['Previous_Claims_Filed'] / (df['Years_Without_Claims'] + 1)
 
     # Fast categorical conversion
-    cat_cols = ['Region_Code', 'Deductible_Tier', 'Acquisition_Channel', 'Employment_Status']
+    cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier', 
+                'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status', 
+                'Policy_Start_Month']
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype('category')
