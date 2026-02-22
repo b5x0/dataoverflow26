@@ -8,9 +8,11 @@ import SalesHUD from './components/SalesHUD'
 import ManualOverrideForm, { type FormData } from './components/ManualOverrideForm'
 
 // ── Constants ──────────────────────────────────────────────────
-const isProd = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-const WS_URL = isProd ? `wss://${window.location.host}/ws/advisor` : 'ws://localhost:8002/ws/advisor'
-const REST_URL = isProd ? `https://${window.location.host}/predict` : 'http://localhost:8002/predict'
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'localhost:8002'
+const IS_SECURE = BASE_URL.includes('onrender.com') || window.location.protocol === 'https:'
+
+const WS_URL = `${IS_SECURE ? 'wss' : 'ws'}://${BASE_URL}/ws/advisor`
+const REST_URL = `${IS_SECURE ? 'https' : 'http'}://${BASE_URL}/predict`
 const SAMPLE_RATE = 16000
 
 const DEFAULT_FORM: FormData = {
