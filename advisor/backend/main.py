@@ -394,9 +394,37 @@ async def ws_advisor(websocket: WebSocket):
 
     try:
         while True:
+            # Reconnect loop for Gemini Session
             try:
                 async with client.aio.live.connect(model=MODEL_ID, config=CONFIG) as session:
                     logger.info(f"✅ Gemini Live connected: {MODEL_ID}")
+                    
+                    # 🚀 AI Speaks First Initiative
+                    logger.info("   Triggering AI greeting...")
+                    try:
+                        # Depending on the SDK versions, sometimes it's send(input=...) or send(text=...)
+                        # If a simple text init doesn't work, we can just let it sit, but we'll try send()
+                        await session.send(input="[SYSTEM: Hello! Introduce yourself as the InsureGuard AI Spokesman calling the client to gather their details. Keep it very short, punchy.]", end_of_turn=True)
+                    except Exception as e:
+                        logger.warning(f"   Could not send initial text prompt: {e}")
+
+                    async def handle_analysis(transcript: str):
+                        """Runs the Heavy REST generation asynchronously so it doesn't block audio"""
+                        logger.info(f"   Received user transcript: {transcript[:50]}...")
+                        try:
+                            # Use AIO to prevent blocking the event loop! This is a massive source of lag if synchronous.
+                            res = await client.aio.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=f"{MASTER_PROMPT}\n\nTRANSCRIBED CLIENT DESCRIPTION:\n{transcript}"
+                            )
+                            extracted = parse_features(res.text)
+                            if extracted:
+                                result = run_pipeline(extracted)
+                                await websocket.send_text(json.dumps(result))
+                            else:
+                                await websocket.send_text(json.dumps({"type": "TURN_COMPLETE"}))
+                        except Exception as e:
+                            logger.error(f"   Hybrid Analysis failed: {e}")
 
                     async def receive_from_client():
                         """PCM bytes or USER_TRANSCRIPT from React."""
@@ -404,8 +432,9 @@ async def ws_advisor(websocket: WebSocket):
                             while True:
                                 msg_raw = await websocket.receive()
                                 if "bytes" in msg_raw:
+                                    # Use exact format from live_server.py recipe
                                     await session.send_realtime_input(
-                                        audio={"data": msg_raw["bytes"], "mime_type": "audio/pcm;rate=16000"}
+                                        audio={"data": msg_raw["bytes"], "mime_type": "audio/pcm"}
                                     )
                                 elif "text" in msg_raw:
                                     text = msg_raw["text"]
@@ -414,55 +443,68 @@ async def ws_advisor(websocket: WebSocket):
                                         data = json.loads(text)
                                         if data.get("type") == "USER_TRANSCRIPT":
                                             transcript = data.get("content", "")
-                                            logger.info(f"   Received user transcript: {transcript[:50]}...")
-                                            # RUN HYBRID ANALYSIS with REST
-                                            try:
-                                                res = client.models.generate_content(
-                                                    model="gemini-2.5-flash",
-                                                    contents=f"{MASTER_PROMPT}\n\nTRANSCRIBED CLIENT DESCRIPTION:\n{transcript}"
-                                                )
-                                                extracted = parse_features(res.text)
-                                                if extracted:
-                                                    result = run_pipeline(extracted)
-                                                    await websocket.send_text(json.dumps(result))
-                                                else:
-                                                    await websocket.send_text(json.dumps({"type": "TURN_COMPLETE"}))
-                                            except Exception as e:
-                                                logger.error(f"   Hybrid Analysis failed: {e}")
+                                            # Fire and forget the analysis so audio keeps flowing
+                                            asyncio.create_task(handle_analysis(transcript))
                                     except: pass
-                        except WebSocketDisconnect: pass
+                        except WebSocketDisconnect:
+                            logger.info("Frontend disconnected (receive loop).")
+                            return
+                        except RuntimeError as e:
+                            if "Cannot call" in str(e):
+                                logger.info("Receive called on closed socket (normal shutdown).")
+                                return
+                            else:
+                                logger.error(f"RuntimeError in receive_from_client: {e}")
+                                raise
                         except Exception as e:
-                            logger.error(f"   receive_from_client error: {e}")
+                            logger.error(f"Error in receive_from_client: {e}")
+                            raise
 
                     async def send_to_client():
                         """Gemini audio → React."""
                         try:
+                            logger.info("Starting send_to_client loop...")
                             while True:
-                                async for part in session.receive():
-                                    if part.server_content is None: continue
-                                    model_turn = part.server_content.model_turn
-                                    if model_turn:
-                                        for p in model_turn.parts:
-                                            if p.inline_data:
-                                                await websocket.send_bytes(p.inline_data.data)
-                                    # Signal turn complete to reset UI state
-                                    if part.server_content.turn_complete:
-                                        await websocket.send_text(json.dumps({"type": "TURN_COMPLETE"}))
+                                try:
+                                    async for part in session.receive():
+                                        if part.server_content is None: continue
+                                        
+                                        if part.server_content.turn_complete:
+                                            logger.info("✅ Gemini Turn Complete. Sending signal to client.")
+                                            await websocket.send_text(json.dumps({"type": "TURN_COMPLETE"}))
+
+                                        model_turn = part.server_content.model_turn
+                                        if model_turn:
+                                            for p in model_turn.parts:
+                                                if p.inline_data:
+                                                    await websocket.send_bytes(p.inline_data.data)
+                                    
+                                    logger.info("session.receive() finished. Restarting loop...")
+                                    await asyncio.sleep(0.1)
+                                except Exception as e:
+                                    logger.error(f"Error in inner send_to_client loop: {e}")
+                                    break
                         except Exception as e:
-                            logger.error(f"   send_to_client error: {e}")
+                            logger.error(f"Error in send_to_client: {e}")
+                            raise
 
                     async with asyncio.TaskGroup() as tg:
                         tg.create_task(receive_from_client())
                         tg.create_task(send_to_client())
+                        
+                    logger.info("Session context exited. Reconnecting...")
 
             except WebSocketDisconnect:
+                logger.info("WebSocket disconnected (Outer Loop).")
                 break
             except asyncio.CancelledError:
+                logger.info("Task Cancelled (Outer Loop).")
                 break
             except Exception as e:
                 if "WebSocketDisconnect" in str(e) or "Cannot call" in str(e):
+                    logger.info("WebSocket disconnected (Exception Group).")
                     break
-                logger.error(f"   Outer session error: {e}")
+                logger.error(f"Session Error (Outer Loop): {e}")
                 traceback.print_exc()
                 await asyncio.sleep(1)
 
@@ -474,7 +516,6 @@ async def ws_advisor(websocket: WebSocket):
         except Exception:
             pass
         logger.info("WebSocket /ws/advisor closed.")
-
 
 # ── REST: POST /predict ────────────────────────────────────────────────────────
 class PredictRequest(BaseModel):
