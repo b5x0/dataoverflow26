@@ -1,1 +1,11 @@
-# No external dependencies required
+fastapi
+uvicorn
+google-genai
+numpy
+pandas
+shap
+qdrant-client
+joblib
+lightgbm
+python-dotenv
+watchfiles

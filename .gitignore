@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+ENV/
+.python-version
+
+# Node/Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+
+# Qdrant
+advisor/qdrant_data/.lock
+*.lock
+
+# Model
+# advisor/backend/model.pkl
