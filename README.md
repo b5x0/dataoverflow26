@@ -28,7 +28,7 @@ Unlike standard "black-box" models, InsureGuard was built under strict 1-core CP
 ## 📦 Installation & Setup
 ```bash
 # Clone the repository
-git clone [https://github.com/b5x0/dataoverflow26.git](https://github.com/b5x0/dataoverflow26.git)
+git clone https://github.com/b5x0/dataoverflow26.git
 
 # Install dependencies
 pip install -r requirements.txt
@@ -38,6 +38,9 @@ docker run -p 6333:6333 qdrant/qdrant
 
 ```
 
+## ☁️ Live Demo & Deployment
+- **Frontend Dashboard:** [https://dataoverflow26.onrender.com](https://dataoverflow26.onrender.com)
+  *(Note: The AI Spokesman requires microphone permissions to initiate the call.)*
 ## 📈 Performance Metrics
 
 | Metric | Result |

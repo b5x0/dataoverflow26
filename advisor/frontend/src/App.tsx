@@ -74,13 +74,12 @@ export default function App() {
     const analyserRef = useRef<AnalyserNode | null>(null)
     const scriptRef = useRef<ScriptProcessorNode | null>(null)
     const streamRef = useRef<MediaStream | null>(null)
-    const playQueueRef = useRef<ArrayBuffer[]>([])
-    const isPlayingRef = useRef(false)
     const transcriptRef = useRef<TranscriptEntry[]>([])
     const idRef = useRef(0)
     const levelTimerRef = useRef<number>(0)
     const aiTextBufRef = useRef<string>('')
     const recognitionRef = useRef<any>(null)
+    const nextPlayTimeRef = useRef<number>(0)
 
     // ── Audio level polling
     const startLevelPoll = useCallback(() => {
@@ -100,36 +99,42 @@ export default function App() {
         levelTimerRef.current = requestAnimationFrame(tick)
     }, [])
 
-    // ── Play PCM audio from Gemini (24kHz, 16-bit, mono)
+    // ── Play PCM audio from Gemini (24kHz, 16-bit, mono) efficiently
     const playPCMChunk = useCallback(async (buf: ArrayBuffer) => {
-        playQueueRef.current.push(buf)
-        if (isPlayingRef.current) return
-        isPlayingRef.current = true
-        setSpeaking(true)
-
         const ctx = audioCtxRef.current ?? new AudioContext({ sampleRate: 24000 })
         audioCtxRef.current = ctx
 
-        while (playQueueRef.current.length > 0) {
-            const chunk = playQueueRef.current.shift()!
-            const view = new DataView(chunk)
-            const samples = new Float32Array(chunk.byteLength / 2)
-            for (let i = 0; i < samples.length; i++) {
-                samples[i] = view.getInt16(i * 2, true) / 0x8000
-            }
-            const audioBuf = ctx.createBuffer(1, samples.length, 24000)
-            audioBuf.copyToChannel(samples, 0)
-            const src = ctx.createBufferSource()
-            src.buffer = audioBuf
-            src.connect(ctx.destination)
-            await new Promise<void>(resolve => {
-                src.onended = () => resolve()
-                src.start()
-            })
+        if (ctx.state === 'suspended') await ctx.resume()
+
+        const view = new DataView(buf)
+        const samples = new Float32Array(buf.byteLength / 2)
+        for (let i = 0; i < samples.length; i++) {
+            samples[i] = view.getInt16(i * 2, true) / 0x8000
         }
 
-        isPlayingRef.current = false
-        setSpeaking(false)
+        const audioBuf = ctx.createBuffer(1, samples.length, 24000)
+        audioBuf.copyToChannel(samples, 0)
+
+        const src = ctx.createBufferSource()
+        src.buffer = audioBuf
+        src.connect(ctx.destination)
+
+        setSpeaking(true)
+
+        // Smooth scheduling: keep chunks tight, but skip ahead if we lag too far behind
+        if (nextPlayTimeRef.current < ctx.currentTime) {
+            nextPlayTimeRef.current = ctx.currentTime + 0.05
+        }
+
+        src.start(nextPlayTimeRef.current)
+        nextPlayTimeRef.current += audioBuf.duration
+
+        src.onended = () => {
+            // If this was roughly the last chunk, stop speaking animation
+            if (ctx.currentTime >= nextPlayTimeRef.current - 0.1) {
+                setSpeaking(false)
+            }
+        }
     }, [])
 
     // ── Start session
@@ -207,6 +212,7 @@ export default function App() {
                 setTranscript([])
                 idRef.current = 0
                 aiTextBufRef.current = ''
+                nextPlayTimeRef.current = 0
             }
 
             ws.onmessage = async (evt) => {
@@ -234,6 +240,8 @@ export default function App() {
                             }
                         } else if (msg.type === 'TURN_COMPLETE') {
                             aiTextBufRef.current = ''
+                            // Reset audio schedule so next turn is immediate
+                            nextPlayTimeRef.current = 0
                         }
                     } catch (e) { console.error('WS Error:', e) }
                 }
