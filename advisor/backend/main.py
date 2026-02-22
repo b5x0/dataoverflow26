@@ -116,19 +116,21 @@ Engineered Features (computed by preprocess()):
 - Risk_Ratio: Claims / (Years_Without_Claims + 1).
 """
 
-# ── Master System Prompt ───────────────────────────────────────────────────────
-MASTER_PROMPT = f"""
-You are the "AI Spokesman" — a high-energy, professional insurance representative calling a potential client.
-You are powered by the Voice-QL engine (v2.0).
+# ── System Prompts ───────────────────────────────────────────────────────
 
-YOUR MISSION:
-1. You are actively CALLING a client (the user) to gather missing information for their insurance profile.
-2. Be proactive and polite. Start the conversation by introducing yourself and asking about one of the missing features from the list below (e.g., "Hello! I'm calling to quickly verify your annual income for your new policy...").
-3. As the client provides details, extract them into a structured JSON block wrapped in <FEATURES>...</FEATURES>.
-4. After each set of information provided, briefly explain how it improves their policy options and ask for the next missing detail.
-5. If you have enough data for a prediction, deliver a concise 2-sentence tactical offer.
+VOICE_PROMPT = """You are the "InsureGuard AI Spokesman". You are calling a client to gather missing insurance data (e.g. income, dependents, claim history).
+CRITICAL RULES:
+1. Keep all responses under 2 concise sentences. Be punchy, fast, and professional.
+2. Only speak in English.
+3. If this is the start of the conversation, introduce yourself and ask a single quick question to begin profiling them.
+4. Do NOT output any JSON, markup tags, or special characters. Speak naturally.
+"""
 
-FEATURE EXTRACTION FORMAT — always emit this tag when you have enough data:
+EXTRACTION_PROMPT = f"""
+You are the "Intelligent Insurance Strategist" extraction engine.
+Listen to the transcribed conversation and extract insurance features into a JSON block.
+
+FEATURE EXTRACTION FORMAT — always emit this tag when you have any data:
 <FEATURES>
 {{
   "Estimated_Annual_Income": <number or null>,
@@ -142,7 +144,7 @@ FEATURE EXTRACTION FORMAT — always emit this tag when you have enough data:
   "Deductible_Tier": "<Low|Medium|High or null>",
   "Acquisition_Channel": "<string or null>",
   "Payment_Schedule": "<Monthly|Quarterly|Annual or null>",
-  "Policy_Start_Month": "<month name or null>",
+  "Policy_Start_Month": "<string or null>",
   "Existing_Policyholder": <0|1|null>,
   "Previous_Policy_Duration_Months": <int or null>,
   "Vehicles_on_Policy": <int or null>,
@@ -152,24 +154,16 @@ FEATURE EXTRACTION FORMAT — always emit this tag when you have enough data:
 }}
 </FEATURES>
 
-After the JSON, continue your conversation or give your 2-sentence tactical pitch.
-Keep it sharp. No fluff. Imagine you are on a real sales call.
-
 {BUNDLE_DEFINITIONS}
-
 {DATA_DEFINITIONS}
-
 CRITICAL RULES:
 - Emit <FEATURES> even with partial data (use null for unknown fields).
-- Keep the entire response under 30 seconds of speech.
-- Be in English. Professional tone only.
-- Never fabricate numbers — only extract what the agent stated.
 """
 
 # Configure session - MUST use dictionary for this model and ["AUDIO"] ONLY
 CONFIG = {
     "response_modalities": ["AUDIO"],
-    "system_instruction": MASTER_PROMPT
+    "system_instruction": VOICE_PROMPT
 }
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
@@ -402,9 +396,7 @@ async def ws_advisor(websocket: WebSocket):
                     # 🚀 AI Speaks First Initiative
                     logger.info("   Triggering AI greeting...")
                     try:
-                        # Depending on the SDK versions, sometimes it's send(input=...) or send(text=...)
-                        # If a simple text init doesn't work, we can just let it sit, but we'll try send()
-                        await session.send(input="[SYSTEM: Hello! Introduce yourself as the InsureGuard AI Spokesman calling the client to gather their details. Keep it very short, punchy.]", end_of_turn=True)
+                        await session.send(input="Introduce yourself briefly as the InsureGuard AI Spokesman. Say you are calling to gather their details. Keep it very short and conversational.", end_of_turn=True)
                     except Exception as e:
                         logger.warning(f"   Could not send initial text prompt: {e}")
 
@@ -415,7 +407,7 @@ async def ws_advisor(websocket: WebSocket):
                             # Use AIO to prevent blocking the event loop! This is a massive source of lag if synchronous.
                             res = await client.aio.models.generate_content(
                                 model="gemini-2.5-flash",
-                                contents=f"{MASTER_PROMPT}\n\nTRANSCRIBED CLIENT DESCRIPTION:\n{transcript}"
+                                contents=f"{EXTRACTION_PROMPT}\n\nTRANSCRIBED CLIENT DESCRIPTION:\n{transcript}"
                             )
                             extracted = parse_features(res.text)
                             if extracted:
@@ -519,24 +511,24 @@ async def ws_advisor(websocket: WebSocket):
 
 # ── REST: POST /predict ────────────────────────────────────────────────────────
 class PredictRequest(BaseModel):
-    Estimated_Annual_Income:        float = 50000.0
-    Employment_Status:              str   = "Full-Time"
-    Region_Code:                    str   = "Unknown"
-    Adult_Dependents:               int   = 0
-    Child_Dependents:               int   = 0
-    Infant_Dependents:              int   = 0
-    Previous_Claims_Filed:          int   = 0
-    Years_Without_Claims:           int   = 1
-    Deductible_Tier:                str   = "Medium"
-    Acquisition_Channel:            str   = "Online"
-    Payment_Schedule:               str   = "Monthly"
-    Policy_Start_Month:             str   = "January"
-    Existing_Policyholder:          int   = 0
-    Previous_Policy_Duration_Months: int  = 12
-    Vehicles_on_Policy:             int   = 1
-    Custom_Riders_Requested:        int   = 0
-    Grace_Period_Extensions:        int   = 0
-    Policy_Cancelled_Post_Purchase: int   = 0
+    Estimated_Annual_Income:        Any = 50000.0
+    Employment_Status:              Any = "Full-Time"
+    Region_Code:                    Any = "Unknown"
+    Adult_Dependents:               Any = 0
+    Child_Dependents:               Any = 0
+    Infant_Dependents:              Any = 0
+    Previous_Claims_Filed:          Any = 0
+    Years_Without_Claims:           Any = 1
+    Deductible_Tier:                Any = "Medium"
+    Acquisition_Channel:            Any = "Online"
+    Payment_Schedule:               Any = "Monthly"
+    Policy_Start_Month:             Any = "January"
+    Existing_Policyholder:          Any = 0
+    Previous_Policy_Duration_Months: Any = 12
+    Vehicles_on_Policy:             Any = 1
+    Custom_Riders_Requested:        Any = 0
+    Grace_Period_Extensions:        Any = 0
+    Policy_Cancelled_Post_Purchase: Any = 0
 
 
 @app.post("/predict")
