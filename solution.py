@@ -8,10 +8,11 @@
 # Good luck!
 # ----------------------------------------------------------------
 
-
+# Import necessary libraries here
 import pandas as pd
 import joblib
-import catboost as cb
+import lightgbm as lgb
+import numpy as np
 
 def preprocess(df):
     # Create a copy to avoid SettingWithCopyWarning, but do it efficiently
@@ -25,25 +26,21 @@ def preprocess(df):
     df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
     df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
 
-    # Convert object columns to category for LightGBM/CatBoost
+    # Convert object columns to category for LightGBM
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
                 'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status',
                 'Policy_Start_Month']
     for col in cat_cols:
         if col in df_proc.columns:
-            # We enforce string typing for objects initially, then to category.
-            # CatBoost handles string/category columns perfectly when passed via cat_features.
-            # Easiest way to handle is cast to string here to avoid mixed types, but 'category' is safer overall.
             df_proc[col] = df_proc[col].astype('category')
             
     # Feature Engineering (Combined Dependents and Risk)
     df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
-    df_proc['Risk_Score_Proxy'] = df_proc['Years_Without_Claims'] - df_proc['Previous_Claims_Filed']
     df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
     df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
 
-    # CRITICAL: Drop noisy IDs to prevent overfitting
-    cols_to_drop = ['Broker_ID', 'Employer_ID']
+    # CRITICAL: Drop noisy IDs and highly correlated Risk_Score_Proxy
+    cols_to_drop = ['Broker_ID', 'Employer_ID', 'Risk_Score_Proxy']
     df_proc = df_proc.drop(columns=[col for col in cols_to_drop if col in df_proc.columns])
 
     # Downcast numeric types for memory optimization (1GB constraint)
@@ -52,23 +49,14 @@ def preprocess(df):
     
     int_cols = df_proc.select_dtypes(include=['int64']).columns
     for col in int_cols:
-        # Need to keep User_ID undisturbed, so exclude it from int casting if it sneaks in.
         if col != 'User_ID' and col != 'Purchased_Coverage_Bundle':
-             # downcast if possible to save memory
              df_proc[col] = pd.to_numeric(df_proc[col], downcast='integer')
 
     return df_proc
 
 
 def load_model():
-    model = None
-    # ------------------ MODEL LOADING LOGIC ------------------
-
-    # Inside this block, load your trained model.
-    model = joblib.load('model.pkl')
-
-    # ------------------ END MODEL LOADING LOGIC ------------------
-    return model
+    return joblib.load('model.pkl')
 
 
 def predict(df, model):
