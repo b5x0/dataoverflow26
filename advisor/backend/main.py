@@ -404,14 +404,15 @@ async def ws_advisor(websocket: WebSocket):
                         """Runs the Heavy REST generation asynchronously so it doesn't block audio"""
                         logger.info(f"   Received user transcript: {transcript[:50]}...")
                         try:
-                            # Use AIO to prevent blocking the event loop! This is a massive source of lag if synchronous.
+                            # Use AIO to prevent blocking the event loop during network call
                             res = await client.aio.models.generate_content(
                                 model="gemini-2.5-flash",
                                 contents=f"{EXTRACTION_PROMPT}\n\nTRANSCRIBED CLIENT DESCRIPTION:\n{transcript}"
                             )
                             extracted = parse_features(res.text)
                             if extracted:
-                                result = run_pipeline(extracted)
+                                # Offload blocking pandas, SHAP, and Qdrant logic to a background thread!
+                                result = await asyncio.to_thread(run_pipeline, extracted)
                                 await websocket.send_text(json.dumps(result))
                             else:
                                 await websocket.send_text(json.dumps({"type": "TURN_COMPLETE"}))
