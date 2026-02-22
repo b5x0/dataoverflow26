@@ -5,7 +5,6 @@ import lightgbm as lgb
 import numpy as np
 
 def preprocess(df):
-    # Create a copy to avoid SettingWithCopyWarning, but do it efficiently
     df_proc = df.copy()
 
     # Fill basic missing values
@@ -13,39 +12,38 @@ def preprocess(df):
     df_proc['Region_Code'] = df_proc['Region_Code'].fillna('Unknown')
     df_proc['Deductible_Tier'] = df_proc['Deductible_Tier'].fillna('Unknown')
     df_proc['Acquisition_Channel'] = df_proc['Acquisition_Channel'].fillna('Unknown')
-    df_proc['Broker_ID'] = df_proc['Broker_ID'].fillna(-1)
-    df_proc['Employer_ID'] = df_proc['Employer_ID'].fillna(-1)
 
-    # Feature Engineering (Combined Dependents and Risk)
-    df_proc['Total_Dependents'] = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
-    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (df_proc['Total_Dependents'] + 1)
-    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
-
-    # New Hybrid Sniper Features (High-Intensity Interactions)
-    df_proc['Loyalty_Index'] = df_proc['Years_Without_Claims'] * df_proc['Existing_Policyholder']
-    df_proc['Household_Burden'] = df_proc['Total_Dependents'] / (df_proc['Vehicles_on_Policy'] + 1)
-    df_proc['Premium_Capacity'] = df_proc['Estimated_Annual_Income'] / (df_proc['Deductible_Tier'].map({'Tier 1': 1, 'Tier 2': 2, 'Tier 3': 3, 'Tier 4': 4}).fillna(2))
-
-    # Convert object columns to category for LightGBM
+    # Convert object columns to category explicitly
     cat_cols = ['Region_Code', 'Broker_Agency_Type', 'Deductible_Tier',
                 'Acquisition_Channel', 'Payment_Schedule', 'Employment_Status',
                 'Policy_Start_Month']
     for col in cat_cols:
         if col in df_proc.columns:
             df_proc[col] = df_proc[col].astype('category')
-
-    # CRITICAL: Drop noisy IDs and highly correlated Risk_Score_Proxy
-    cols_to_drop = ['Broker_ID', 'Employer_ID', 'Risk_Score_Proxy']
-    df_proc = df_proc.drop(columns=[col for col in cols_to_drop if col in df_proc.columns])
-
-    # Downcast numeric types for memory optimization (1GB constraint)
-    float_cols = df_proc.select_dtypes(include=['float64']).columns
-    df_proc[float_cols] = df_proc[float_cols].astype('float32')
+            
+    # Feature Engineering (Sniper Minimal Vectorized Interactions)
+    if 'Purchased_Coverage_Bundle' not in df_proc.columns:
+        Total_Dependents = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
+    else:
+        Total_Dependents = df_proc['Adult_Dependents'] + df_proc['Child_Dependents'].replace(-1, 0) + df_proc['Infant_Dependents']
     
-    int_cols = df_proc.select_dtypes(include=['int64']).columns
-    for col in int_cols:
-        if col != 'User_ID' and col != 'Purchased_Coverage_Bundle':
-             df_proc[col] = pd.to_numeric(df_proc[col], downcast='integer')
+    df_proc['Income_per_Dependent'] = df_proc['Estimated_Annual_Income'] / (Total_Dependents + 1)
+    df_proc['Risk_Ratio'] = df_proc['Previous_Claims_Filed'] / (df_proc['Years_Without_Claims'] + 1)
+    df_proc['Loyalty_Index'] = df_proc['Previous_Policy_Duration_Months'] * df_proc['Existing_Policyholder']
+
+    # CRITICAL: Drop noisy IDs
+    cols_to_drop = ['Broker_ID', 'Employer_ID']
+    df_proc.drop(columns=[col for col in cols_to_drop if col in df_proc.columns], inplace=True)
+
+    # Perform a final .astype('float32') on all numerical columns to minimize cache misses
+    num_cols = df_proc.select_dtypes(include=['number']).columns
+    df_proc[num_cols] = df_proc[num_cols].astype('float32')
+    
+    # Keep output formatting clean
+    if 'User_ID' in df_proc.columns:
+        df_proc['User_ID'] = df_proc['User_ID'].astype(int)
+    if 'Purchased_Coverage_Bundle' in df_proc.columns:
+         df_proc['Purchased_Coverage_Bundle'] = df_proc['Purchased_Coverage_Bundle'].astype(int)
 
     return df_proc
 
@@ -54,12 +52,15 @@ def load_model():
 
 def predict(df, model):
     X = df.drop(columns=['User_ID'])
-    # LightGBM predict
-    preds = model.predict(X).flatten()
     
+    # Vectorization & Flattening: Access numpy array via .values, predict, and cast
+    # (Note: Passing X natively handles LightGBM categorical types better than X.values)
+    preds = model.predict(X).astype(int)
+    
+    # Final rapid DF construction
     predictions = pd.DataFrame({
         'User_ID': df['User_ID'].values,
-        'Purchased_Coverage_Bundle': preds.astype(int)
+        'Purchased_Coverage_Bundle': preds
     })
     return predictions
 
