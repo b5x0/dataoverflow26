@@ -40,8 +40,6 @@ def preprocess(df):
     df_proc[num_cols] = df_proc[num_cols].astype('float32')
     
     # Keep output formatting clean
-    if 'User_ID' in df_proc.columns:
-        df_proc['User_ID'] = df_proc['User_ID'].astype(int)
     if 'Purchased_Coverage_Bundle' in df_proc.columns:
          df_proc['Purchased_Coverage_Bundle'] = df_proc['Purchased_Coverage_Bundle'].astype(int)
 
